@@ -56,9 +56,8 @@ public class ViewApp extends Application {
         seedDemoData();
         refreshList();
 
-        // Wire GroceryList to observe WeekPlan and resolve ingredients from RecipeController
+        // Wire GroceryList to observe WeekPlan
         be.uantwerpen.sd.project.GroceryList.GroceryList grocery = be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance();
-        grocery.setIngredientResolver(id -> controller.findById(id).map(Recipe::getIngredients));
         mealController.getWeekPlan().addObserver(grocery);
 
         BorderPane root = new BorderPane();
@@ -235,17 +234,16 @@ public class ViewApp extends Application {
                 MealSlot slot = ce.getKey();
                 ComboBox<Recipe> combo = ce.getValue();
                 combo.setItems(recipes);
-                Optional<UUID> rid = mealController.getRecipeId(day, slot);
-                if (rid.isPresent()) {
-                    Recipe r = controller.findById(rid.get()).orElse(null);
-                    combo.getSelectionModel().select(r);
+                Optional<Recipe> maybe = mealController.getRecipe(day, slot);
+                if (maybe.isPresent()) {
+                    combo.getSelectionModel().select(maybe.get());
                 } else {
                     combo.getSelectionModel().clearSelection();
                 }
                 // Attach listener with proper context
                 combo.valueProperty().addListener((obs, old, val) -> {
                     if (val != null) {
-                        mealController.setRecipe(day, slot, val.getId());
+                        mealController.setRecipe(day, slot, val);
                         status("Planned '" + val.getTitle() + "' for " + shortDay(day) + " (" + slot.getDisplayName() + ")");
                     }
                 });
@@ -363,10 +361,10 @@ public class ViewApp extends Application {
             return;
         }
         try {
-            controller.updateTitle(sel.getId(), valueOrThrow(titleField.getText(), "Title is required"));
-            controller.updateDescription(sel.getId(), defaultString(descriptionArea.getText()));
-            controller.updateIngredients(sel.getId(), parseIngredients(ingredientsArea.getText()));
-            controller.updateTags(sel.getId(), parseTags(tagsField.getText()));
+            controller.updateTitle(sel, valueOrThrow(titleField.getText(), "Title is required"));
+            controller.updateDescription(sel, defaultString(descriptionArea.getText()));
+            controller.updateIngredients(sel, parseIngredients(ingredientsArea.getText()));
+            controller.updateTags(sel, parseTags(tagsField.getText()));
             // Refresh selection to show any formatted changes
             listView.refresh();
             status("Updated recipe: " + sel.getTitle());
@@ -387,7 +385,7 @@ public class ViewApp extends Application {
         alert.setContentText("This action cannot be undone.");
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            boolean removed = controller.remove(sel.getId());
+            boolean removed = controller.remove(sel);
             if (removed) {
                 recipes.remove(sel);
                 clearForm();

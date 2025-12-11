@@ -1,5 +1,7 @@
 package be.uantwerpen.sd.project.Planner;
 
+import be.uantwerpen.sd.project.Recipe.Recipe;
+
 import java.time.DayOfWeek;
 import java.util.*;
 
@@ -33,7 +35,7 @@ public class WeekPlan implements MealPlanSubject {
     }
 
     private void notifyObservers() {
-        Map<DayOfWeek, Map<MealSlot, UUID>> snap = snapshot();
+        Map<DayOfWeek, Map<MealSlot, Recipe>> snap = snapshot();
         for (MealPlanObserver o : observers) {
             o.onWeekPlanChanged(snap);
         }
@@ -55,12 +57,12 @@ public class WeekPlan implements MealPlanSubject {
         return days.get(Objects.requireNonNull(day, "day"));
     }
 
-    public Optional<UUID> getRecipeId(DayOfWeek day, MealSlot slot) {
+    public Optional<Recipe> getRecipe(DayOfWeek day, MealSlot slot) {
         return getDay(day).get(slot);
     }
 
-    public void setRecipe(DayOfWeek day, MealSlot slot, UUID recipeId) {
-        getDay(day).set(slot, recipeId);
+    public void setRecipe(DayOfWeek day, MealSlot slot, Recipe recipe) {
+        getDay(day).set(slot, recipe);
         notifyObservers();
     }
 
@@ -69,8 +71,8 @@ public class WeekPlan implements MealPlanSubject {
         notifyObservers();
     }
 
-    public Map<DayOfWeek, Map<MealSlot, UUID>> snapshot() {
-        Map<DayOfWeek, Map<MealSlot, UUID>> snap = new EnumMap<>(DayOfWeek.class);
+    public Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot() {
+        Map<DayOfWeek, Map<MealSlot, Recipe>> snap = new EnumMap<>(DayOfWeek.class);
         for (Map.Entry<DayOfWeek, DailyPlan> e : days.entrySet()) {
             snap.put(e.getKey(), e.getValue().asMap());
         }

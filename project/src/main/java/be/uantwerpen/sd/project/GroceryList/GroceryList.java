@@ -2,10 +2,10 @@ package be.uantwerpen.sd.project.GroceryList;
 
 import be.uantwerpen.sd.project.Planner.MealPlanObserver;
 import be.uantwerpen.sd.project.Planner.*;
+import be.uantwerpen.sd.project.Recipe.Recipe;
 
 import java.time.DayOfWeek;
 import java.util.*;
-import java.util.function.Function;
 
 /**
  * Grocery list that automatically aggregates ingredients for all recipes
@@ -15,10 +15,10 @@ public class GroceryList implements MealPlanObserver {
 
     private static GroceryList INSTANCE;
 
-    private Function<UUID, Optional<List<String>>> ingredientResolver = id -> Optional.empty();
-
+    // Aggregated items and their counts
     private final Map<String, Integer> items = new LinkedHashMap<>();
 
+    // User-dismissed (checked/removed) items that should be hidden until plan changes
     private final Set<String> dismissed = new LinkedHashSet<>();
 
     private GroceryList(){ }
@@ -30,28 +30,22 @@ public class GroceryList implements MealPlanObserver {
         return INSTANCE;
     }
 
-
-    public void setIngredientResolver(Function<UUID, Optional<List<String>>> resolver) {
-        this.ingredientResolver = Objects.requireNonNull(resolver, "resolver");
-    }
-
     @Override
-    public synchronized void onWeekPlanChanged(Map<DayOfWeek, Map<MealSlot, UUID>> snapshot) {
+    public synchronized void onWeekPlanChanged(Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot) {
         // When the plan changes, reset dismissed selections; the UI can re-dismiss as needed
         dismissed.clear();
         Map<String, Integer> next = new LinkedHashMap<>();
         if (snapshot != null) {
-            for (Map<MealSlot, UUID> day : snapshot.values()) {
-                for (UUID recipeId : day.values()) {
-                    if (recipeId == null) continue;
-                    ingredientResolver.apply(recipeId).ifPresent(list -> {
-                        for (String raw : list) {
-                            String ing = normalize(raw);
-                            if (ing.isEmpty()) continue;
-                            if (dismissed.contains(ing)) continue; // hide dismissed items until user resets
-                            next.merge(ing, 1, Integer::sum);
-                        }
-                    });
+            for (Map<MealSlot, Recipe> day : snapshot.values()) {
+                for (Recipe recipe : day.values()) {
+                    if (recipe == null) continue;
+                    List<String> list = recipe.getIngredients();
+                    for (String raw : list) {
+                        String ing = normalize(raw);
+                        if (ing.isEmpty()) continue;
+                        if (dismissed.contains(ing)) continue; // hide dismissed items until user resets
+                        next.merge(ing, 1, Integer::sum);
+                    }
                 }
             }
         }

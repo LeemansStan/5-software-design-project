@@ -9,27 +9,23 @@ import java.util.stream.Collectors;
  * Acts as the single entry point for the View to interact with Recipe data.
  */
 public class RecipeService {
-    private final Map<UUID, Recipe> byId = new LinkedHashMap<>();
+    private final List<Recipe> all = new ArrayList<>();
 
     // CREATE
     public Recipe create(String title, String description, List<String> ingredients, Collection<String> tags) {
         Recipe r = new Recipe(title, description, ingredients, tags);
-        byId.put(r.getId(), r);
+        all.add(r);
         return r;
     }
 
     public void add(Recipe recipe) {
         Objects.requireNonNull(recipe, "recipe");
-        byId.put(recipe.getId(), recipe);
+        all.add(recipe);
     }
 
     // READ
     public List<Recipe> listAll() {
-        return new ArrayList<>(byId.values());
-    }
-
-    public Optional<Recipe> findById(UUID id) {
-        return Optional.ofNullable(byId.get(id));
+        return new ArrayList<>(all);
     }
 
     public List<Recipe> searchByTitle(String query) {
@@ -45,39 +41,40 @@ public class RecipeService {
     }
 
     private List<Recipe> filter(Predicate<Recipe> predicate) {
-        return byId.values().stream().filter(predicate).collect(Collectors.toList());
+        return all.stream().filter(predicate).collect(Collectors.toList());
     }
 
     // UPDATE (returns updated instance)
-    public Optional<Recipe> updateTitle(UUID id, String newTitle) {
-        return mutate(id, r -> r.setTitle(newTitle));
+    public Optional<Recipe> updateTitle(Recipe recipe, String newTitle) {
+        return mutate(recipe, r -> r.setTitle(newTitle));
     }
 
-    public Optional<Recipe> updateDescription(UUID id, String newDescription) {
-        return mutate(id, r -> r.setDescription(newDescription));
+    public Optional<Recipe> updateDescription(Recipe recipe, String newDescription) {
+        return mutate(recipe, r -> r.setDescription(newDescription));
     }
 
-    public Optional<Recipe> updateIngredients(UUID id, List<String> newIngredients) {
-        return mutate(id, r -> r.setIngredients(newIngredients));
+    public Optional<Recipe> updateIngredients(Recipe recipe, List<String> newIngredients) {
+        return mutate(recipe, r -> r.setIngredients(newIngredients));
     }
 
-    public Optional<Recipe> updateTags(UUID id, Collection<String> newTags) {
-        return mutate(id, r -> r.setTags(newTags));
+    public Optional<Recipe> updateTags(Recipe recipe, Collection<String> newTags) {
+        return mutate(recipe, r -> r.setTags(newTags));
     }
 
-    private Optional<Recipe> mutate(UUID id, java.util.function.Consumer<Recipe> mutator) {
-        Recipe r = byId.get(id);
-        if (r == null) return Optional.empty();
-        mutator.accept(r);
-        return Optional.of(r);
+    private Optional<Recipe> mutate(Recipe recipe, java.util.function.Consumer<Recipe> mutator) {
+        if (recipe == null) return Optional.empty();
+        // Ensure it is the same instance we manage; if not present, refuse to mutate
+        if (!all.contains(recipe)) return Optional.empty();
+        mutator.accept(recipe);
+        return Optional.of(recipe);
     }
 
     // DELETE
-    public boolean remove(UUID id) {
-        return byId.remove(id) != null;
+    public boolean remove(Recipe recipe) {
+        return all.remove(recipe);
     }
 
     public void clear() {
-        byId.clear();
+        all.clear();
     }
 }

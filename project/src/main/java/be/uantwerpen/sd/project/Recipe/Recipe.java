@@ -4,20 +4,13 @@ import java.util.*;
 
 
 public class Recipe {
-    private final UUID id;
     private String title;
     private String description;
     private List<String> ingredients;
     private Set<String> tags;
 
     public Recipe(String title, String description, List<String> ingredients, Collection<String> tags) {
-        this(UUID.randomUUID(), title, description, ingredients, tags);
-    }
-
-    public Recipe(UUID id, String title, String description, List<String> ingredients, Collection<String> tags) {
-        if (id == null) throw new IllegalArgumentException("id cannot be null");
         validateTitle(title);
-        this.id = id;
         this.title = title.trim();
         this.description = description == null ? "" : description.strip();
         this.ingredients = sanitizeIngredients(ingredients);
@@ -54,10 +47,6 @@ public class Recipe {
     }
 
 // getters en setters
-    public UUID getId() {
-        return id;
-    }
-
     public String getTitle() {
         return title;
     }
@@ -93,23 +82,9 @@ public class Recipe {
 
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Recipe recipe = (Recipe) o;
-        return id.equals(recipe.id);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
-
-    @Override
     public String toString() {
         return "Recipe{" +
-                "id=" + id +
-                ", title='" + title + '\'' +
+                "title='" + title + '\'' +
                 ", description='" + (description.length() > 60 ? description.substring(0, 57) + "..." : description) + '\'' +
                 ", ingredients=" + ingredients +
                 ", tags=" + tags +

@@ -1,5 +1,7 @@
 package be.uantwerpen.sd.project.Planner;
 
+import be.uantwerpen.sd.project.Recipe.Recipe;
+
 import java.time.DayOfWeek;
 import java.util.*;
 
@@ -18,14 +20,14 @@ public class MealPlanService {
         weekPlan.setActiveSlots(slots);
     }
 
-    public Optional<UUID> getRecipeId(DayOfWeek day, MealSlot slot) {
-        return weekPlan.getRecipeId(day, slot);
+    public Optional<Recipe> getRecipe(DayOfWeek day, MealSlot slot) {
+        return weekPlan.getRecipe(day, slot);
     }
 
-    public void setRecipe(DayOfWeek day, MealSlot slot, UUID recipeId) {
+    public void setRecipe(DayOfWeek day, MealSlot slot, Recipe recipe) {
         Objects.requireNonNull(day, "day");
         Objects.requireNonNull(slot, "slot");
-        weekPlan.setRecipe(day, slot, recipeId);
+        weekPlan.setRecipe(day, slot, recipe);
     }
 
     public void clear(DayOfWeek day, MealSlot slot) {
