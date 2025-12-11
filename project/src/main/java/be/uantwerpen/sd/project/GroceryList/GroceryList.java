@@ -15,12 +15,11 @@ public class GroceryList implements MealPlanObserver {
 
     private static GroceryList INSTANCE;
 
-    // Resolves a recipe ID to its list of ingredients
-    // Return Optional.empty() if recipe not found
     private Function<UUID, Optional<List<String>>> ingredientResolver = id -> Optional.empty();
 
-    // Aggregated items and their counts
     private final Map<String, Integer> items = new LinkedHashMap<>();
+
+    private final Set<String> dismissed = new LinkedHashSet<>();
 
     private GroceryList(){ }
 
@@ -31,18 +30,15 @@ public class GroceryList implements MealPlanObserver {
         return INSTANCE;
     }
 
-    /**
-     * Provide a resolver that maps recipe IDs to their ingredient lists.
-     */
+
     public void setIngredientResolver(Function<UUID, Optional<List<String>>> resolver) {
         this.ingredientResolver = Objects.requireNonNull(resolver, "resolver");
     }
 
-    /**
-     * Observer callback: recompute the grocery items based on the provided snapshot.
-     */
     @Override
     public synchronized void onWeekPlanChanged(Map<DayOfWeek, Map<MealSlot, UUID>> snapshot) {
+        // When the plan changes, reset dismissed selections; the UI can re-dismiss as needed
+        dismissed.clear();
         Map<String, Integer> next = new LinkedHashMap<>();
         if (snapshot != null) {
             for (Map<MealSlot, UUID> day : snapshot.values()) {
@@ -52,6 +48,7 @@ public class GroceryList implements MealPlanObserver {
                         for (String raw : list) {
                             String ing = normalize(raw);
                             if (ing.isEmpty()) continue;
+                            if (dismissed.contains(ing)) continue; // hide dismissed items until user resets
                             next.merge(ing, 1, Integer::sum);
                         }
                     });
@@ -65,7 +62,6 @@ public class GroceryList implements MealPlanObserver {
     private String normalize(String s) {
         if (s == null) return "";
         String t = s.strip();
-        // very light normalization; could be extended with unit parsing later
         return t;
     }
 
@@ -76,17 +72,24 @@ public class GroceryList implements MealPlanObserver {
         return Collections.unmodifiableMap(new LinkedHashMap<>(items));
     }
 
+
     /**
-     * Convenience: formatted lines suitable for display.
+     * Mark provided ingredient names as dismissed, so they are hidden from the list.
+     * Also removes them from the current in-memory items view.
      */
-    public synchronized List<String> asDisplayLines() {
-        List<String> lines = new ArrayList<>();
-        for (Map.Entry<String, Integer> e : items.entrySet()) {
-            int count = e.getValue();
-            lines.add(count > 1 ? (e.getKey() + " x" + count) : e.getKey());
+    public synchronized void dismissItems(Collection<String> names) {
+        if (names == null || names.isEmpty()) return;
+        for (String n : names) {
+            if (n == null) continue;
+            String key = normalize(n);
+            if (!key.isEmpty()) {
+                dismissed.add(key);
+            }
         }
-        return lines;
+        // Remove from current list immediately
+        items.keySet().removeAll(dismissed);
     }
+
 
     @Override
     public String toString() {

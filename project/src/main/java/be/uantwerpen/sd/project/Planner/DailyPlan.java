@@ -6,10 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Holds planned recipes per meal slot for a single day.
- * Stores recipe IDs to decouple from the Recipe model.
- */
+
 public class DailyPlan {
     private final Map<MealSlot, UUID> bySlot = new EnumMap<>(MealSlot.class);
 

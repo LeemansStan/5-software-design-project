@@ -48,7 +48,6 @@ public class WeekPlan implements MealPlanSubject {
             throw new IllegalArgumentException("At least one meal slot must be active");
         }
         this.activeSlots = EnumSet.copyOf(slots);
-        // When deactivating slots, we keep any stored values; view layer may ignore non-active
         notifyObservers();
     }
 

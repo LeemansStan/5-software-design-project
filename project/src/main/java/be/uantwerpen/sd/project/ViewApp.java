@@ -3,6 +3,7 @@ package be.uantwerpen.sd.project;
 import be.uantwerpen.sd.project.Planner.*;
 import be.uantwerpen.sd.project.Recipe.*;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -19,8 +20,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class ViewApp extends Application {
-
-    // Services mediating between View and Model (Controller+Manager simplified)
     private final RecipeService controller = new RecipeService();
     private final MealPlanService mealController = new MealPlanService();
 
@@ -40,6 +39,10 @@ public class ViewApp extends Application {
     private GridPane plannerGrid;
     private final Map<DayOfWeek, Map<MealSlot, ComboBox<Recipe>>> plannerCells = new EnumMap<>(DayOfWeek.class);
     private final Map<MealSlot, CheckBox> slotToggles = new EnumMap<>(MealSlot.class);
+
+    // Grocery List UI state
+    private VBox groceryRoot;
+    private VBox groceryItemsBox;
 
     public static void main(String[] args) {
         launch(args);
@@ -84,8 +87,13 @@ public class ViewApp extends Application {
         editorTab.setClosable(false);
         Tab plannerTab = new Tab("Weekly Planner", createPlannerPane());
         plannerTab.setClosable(false);
-        tabs.getTabs().addAll(editorTab, plannerTab);
+        Tab groceryTab = new Tab("Grocery List", createGroceryPane());
+        groceryTab.setClosable(false);
+        tabs.getTabs().addAll(editorTab, plannerTab, groceryTab);
         root.setCenter(tabs);
+
+        // Keep Grocery tab synced with plan changes
+        mealController.getWeekPlan().addObserver(snap -> Platform.runLater(this::rebuildGroceryUI));
 
         // Top: search bar
         HBox searchBar = createSearchBar();
@@ -447,5 +455,71 @@ public class ViewApp extends Application {
                 Arrays.asList("chicken", "onion", "garlic", "ginger", "curry paste", "coconut milk", "salt"),
                 List.of("dinner")
         );
+    }
+
+    // ========== Grocery List UI ==========
+    private VBox createGroceryPane() {
+        groceryItemsBox = new VBox(4);
+        ScrollPane scroll = new ScrollPane(groceryItemsBox);
+        scroll.setFitToWidth(true);
+
+        Button refreshBtn = new Button("Refresh (remove checked)");
+        Button selectAllBtn = new Button("Select All");
+        Button deselectAllBtn = new Button("Deselect All");
+        HBox controls = new HBox(8, refreshBtn, selectAllBtn, deselectAllBtn);
+        controls.setAlignment(Pos.CENTER_LEFT);
+        controls.setPadding(new Insets(0, 0, 6, 0));
+
+        refreshBtn.setOnAction(e -> {
+            // Collect checked items and ask GroceryList to dismiss them
+            List<String> toRemove = new ArrayList<>();
+            for (javafx.scene.Node n : groceryItemsBox.getChildren()) {
+                if (n instanceof CheckBox) {
+                    CheckBox cb = (CheckBox) n;
+                    if (cb.isSelected()) {
+                        Object key = cb.getUserData();
+                        if (key != null) toRemove.add(key.toString());
+                    }
+                }
+            }
+            be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().dismissItems(toRemove);
+            rebuildGroceryUI();
+            status("Removed " + toRemove.size() + " item(s) from grocery list");
+        });
+        selectAllBtn.setOnAction(e -> {
+            for (javafx.scene.Node n : groceryItemsBox.getChildren()) {
+                if (n instanceof CheckBox) ((CheckBox) n).setSelected(true);
+            }
+        });
+        deselectAllBtn.setOnAction(e -> {
+            for (javafx.scene.Node n : groceryItemsBox.getChildren()) {
+                if (n instanceof CheckBox) ((CheckBox) n).setSelected(false);
+            }
+        });
+
+        groceryRoot = new VBox(6, controls, scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        rebuildGroceryUI();
+        return groceryRoot;
+    }
+
+    private void rebuildGroceryUI() {
+        if (groceryItemsBox == null) return;
+        Map<String, Integer> items = be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().getItems();
+        groceryItemsBox.getChildren().clear();
+        if (items.isEmpty()) {
+            Label empty = new Label("No items. Plan recipes to populate the list.");
+            empty.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+            groceryItemsBox.getChildren().add(empty);
+            return;
+        }
+        for (Map.Entry<String, Integer> e : items.entrySet()) {
+            String name = e.getKey();
+            int count = e.getValue();
+            String label = count > 1 ? (name + " x" + count) : name;
+            CheckBox cb = new CheckBox(label);
+            cb.setUserData(name); // store raw key
+            groceryItemsBox.getChildren().add(cb);
+        }
     }
 }
