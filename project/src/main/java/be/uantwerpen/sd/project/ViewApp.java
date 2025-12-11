@@ -461,6 +461,32 @@ public class ViewApp extends Application {
         ScrollPane scroll = new ScrollPane(groceryItemsBox);
         scroll.setFitToWidth(true);
 
+        // Add-manual section
+        TextField addNameField = new TextField();
+        addNameField.setPromptText("Item name (e.g. milk)");
+        Spinner<Integer> addQtySpinner = new Spinner<>();
+        addQtySpinner.setPrefWidth(90);
+        addQtySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 999, 1));
+        Button addItemBtn = new Button("Add Item");
+        HBox addBox = new HBox(8, new Label("Add:"), addNameField, new Label("Qty:"), addQtySpinner, addItemBtn);
+        HBox.setHgrow(addNameField, Priority.ALWAYS);
+        addBox.setAlignment(Pos.CENTER_LEFT);
+        addBox.setPadding(new Insets(0, 0, 6, 0));
+
+        addItemBtn.setOnAction(e -> {
+            String name = addNameField.getText() == null ? "" : addNameField.getText().trim();
+            int qty = addQtySpinner.getValue() == null ? 1 : addQtySpinner.getValue();
+            if (name.isEmpty()) {
+                info("Please enter an item name");
+                return;
+            }
+            be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().addManualItem(name, qty);
+            addNameField.clear();
+            addQtySpinner.getValueFactory().setValue(1);
+            rebuildGroceryUI();
+            status("Added '" + name + "' x" + qty + " to grocery list");
+        });
+
         Button refreshBtn = new Button("Refresh (remove checked)");
         Button selectAllBtn = new Button("Select All");
         Button deselectAllBtn = new Button("Deselect All");
@@ -469,7 +495,7 @@ public class ViewApp extends Application {
         controls.setPadding(new Insets(0, 0, 6, 0));
 
         refreshBtn.setOnAction(e -> {
-            // Collect checked items and ask GroceryList to dismiss them
+            // Collect checked items and ask GroceryList to remove them (manual or auto)
             List<String> toRemove = new ArrayList<>();
             for (javafx.scene.Node n : groceryItemsBox.getChildren()) {
                 if (n instanceof CheckBox) {
@@ -480,7 +506,7 @@ public class ViewApp extends Application {
                     }
                 }
             }
-            be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().dismissItems(toRemove);
+            be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().removeItems(toRemove);
             rebuildGroceryUI();
             status("Removed " + toRemove.size() + " item(s) from grocery list");
         });
@@ -495,7 +521,7 @@ public class ViewApp extends Application {
             }
         });
 
-        groceryRoot = new VBox(6, controls, scroll);
+        groceryRoot = new VBox(6, addBox, controls, scroll);
         VBox.setVgrow(scroll, Priority.ALWAYS);
         rebuildGroceryUI();
         return groceryRoot;

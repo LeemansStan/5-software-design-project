@@ -1,10 +1,10 @@
 package be.uantwerpen.sd.project.Planner;
 
 public enum MealSlot {
-    BREAKFAST("Breakfast"),
-    LUNCH("Lunch"),
-    DINNER("Dinner"),
-    SNACKS("Snacks");
+    BREAKFAST("B"),
+    LUNCH("L"),
+    DINNER("D"),
+    SNACKS("S");
 
     private final String displayName;
 

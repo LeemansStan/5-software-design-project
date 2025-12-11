@@ -15,8 +15,11 @@ public class GroceryList implements MealPlanObserver {
 
     private static GroceryList INSTANCE;
 
-    // Aggregated items and their counts
+    // Aggregated items (from planner) and their counts
     private final Map<String, Integer> items = new LinkedHashMap<>();
+
+    // Manually added items and their quantities
+    private final Map<String, Integer> manualItems = new LinkedHashMap<>();
 
     // User-dismissed (checked/removed) items that should be hidden until plan changes
     private final Set<String> dismissed = new LinkedHashSet<>();
@@ -43,7 +46,6 @@ public class GroceryList implements MealPlanObserver {
                     for (String raw : list) {
                         String ing = normalize(raw);
                         if (ing.isEmpty()) continue;
-                        if (dismissed.contains(ing)) continue; // hide dismissed items until user resets
                         next.merge(ing, 1, Integer::sum);
                     }
                 }
@@ -61,15 +63,55 @@ public class GroceryList implements MealPlanObserver {
 
     /**
      * Returns an immutable view of the current grocery items with counts.
+     * Merges manual items with auto-aggregated items, and hides dismissed auto items.
      */
     public synchronized Map<String, Integer> getItems() {
-        return Collections.unmodifiableMap(new LinkedHashMap<>(items));
+        LinkedHashMap<String, Integer> merged = new LinkedHashMap<>();
+        // Manual items first
+        for (Map.Entry<String, Integer> e : manualItems.entrySet()) {
+            merged.put(e.getKey(), Math.max(1, e.getValue() == null ? 1 : e.getValue()));
+        }
+        // Auto items, skipping dismissed, summing counts when overlapping
+        for (Map.Entry<String, Integer> e : items.entrySet()) {
+            String k = e.getKey();
+            if (dismissed.contains(k)) continue;
+            int v = Math.max(1, e.getValue() == null ? 1 : e.getValue());
+            merged.merge(k, v, Integer::sum);
+        }
+        return Collections.unmodifiableMap(merged);
     }
 
+    /**
+     * Add or increase a manually added item with the given quantity (>=1).
+     */
+    public synchronized void addManualItem(String name, int quantity) {
+        String key = normalize(name);
+        if (key.isEmpty()) return;
+        int qty = Math.max(1, quantity);
+        manualItems.merge(key, qty, Integer::sum);
+    }
 
     /**
-     * Mark provided ingredient names as dismissed, so they are hidden from the list.
-     * Also removes them from the current in-memory items view.
+     * Remove items from the list. If an item exists in manual items, it is deleted there.
+     * Otherwise it is considered an auto item and will be dismissed until the plan changes.
+     */
+    public synchronized void removeItems(Collection<String> names) {
+        if (names == null || names.isEmpty()) return;
+        for (String n : names) {
+            if (n == null) continue;
+            String key = normalize(n);
+            if (key.isEmpty()) continue;
+            if (manualItems.containsKey(key)) {
+                manualItems.remove(key);
+            } else {
+                dismissed.add(key);
+            }
+        }
+        // Immediate effect: nothing else needed; getItems() respects dismissed and manual state.
+    }
+
+    /**
+     * Backward compatible: dismiss auto items only (manual items unaffected).
      */
     public synchronized void dismissItems(Collection<String> names) {
         if (names == null || names.isEmpty()) return;
@@ -80,13 +122,10 @@ public class GroceryList implements MealPlanObserver {
                 dismissed.add(key);
             }
         }
-        // Remove from current list immediately
-        items.keySet().removeAll(dismissed);
     }
-
 
     @Override
     public String toString() {
-        return "GroceryList{" + items + '}';
+        return "GroceryList{" + getItems() + '}';
     }
 }
