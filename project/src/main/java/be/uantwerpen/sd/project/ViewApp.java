@@ -296,15 +296,43 @@ public class ViewApp extends Application {
     private HBox createSearchBar() {
         searchField = new TextField();
         searchField.setPromptText("Search by title");
+
+        // 1. Maak het keuzemenu aan voor het Strategy Pattern
+        ComboBox<String> sortBox = new ComboBox<>(FXCollections.observableArrayList(
+                "Sort: Default",
+                "Sort: Title (A-Z)",
+                "Sort: Ingredients (Count)"
+        ));
+        sortBox.setValue("Sort: Default");
+
+        // 2. Koppel de strategieën aan de keuzes
+        sortBox.setOnAction(e -> {
+            String selected = sortBox.getValue();
+            if (selected.contains("Title")) {
+                controller.sortRecipes(new SortByTitle());
+            } else if (selected.contains("Ingredients")) {
+                controller.sortRecipes(new SortByIngredientCount());
+            }
+            refreshList(); // Belangrijk om de lijst op het scherm te verversen!
+        });
+
         Button searchBtn = new Button("Search");
         Button resetBtn = new Button("Reset");
-        HBox box = new HBox(8, new Label("Search:"), searchField, searchBtn, resetBtn);
+
+        // 3. Zorg dat 'sortBox' hier in de lijst met onderdelen staat:
+        HBox box = new HBox(8, new Label("Search:"), searchField, sortBox, searchBtn, resetBtn);
+
         HBox.setHgrow(searchField, Priority.ALWAYS);
         box.setAlignment(Pos.CENTER_LEFT);
         box.setPadding(new Insets(0, 0, 10, 0));
 
         searchBtn.setOnAction(e -> doSearch());
-        resetBtn.setOnAction(e -> { searchField.clear(); refreshList(); });
+        resetBtn.setOnAction(e -> {
+            searchField.clear();
+            sortBox.setValue("Sort: Default");
+            refreshList();
+        });
+
         searchField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) doSearch(); });
         return box;
     }
@@ -360,19 +388,31 @@ public class ViewApp extends Application {
             info("Select a recipe to update");
             return;
         }
+
         try {
-            controller.updateTitle(sel, valueOrThrow(titleField.getText(), "Title is required"));
-            controller.updateDescription(sel, defaultString(descriptionArea.getText()));
-            controller.updateIngredients(sel, parseIngredients(ingredientsArea.getText()));
-            controller.updateTags(sel, parseTags(tagsField.getText()));
-            // Refresh selection to show any formatted changes
-            listView.refresh();
-            status("Updated recipe: " + sel.getTitle());
-        } catch (IllegalArgumentException ex) {
+            // 1. Maak het nieuwe recept met de Builder
+            Recipe updatedRecipe = new Recipe.Builder(titleField.getText())
+                    .description(descriptionArea.getText())
+                    .ingredients(parseIngredients(ingredientsArea.getText()))
+                    .tags(parseTags(tagsField.getText()))
+                    .build();
+
+            // 2. Roep replace aan en vang het resultaat op in een Optional
+            Optional<Recipe> result = controller.replace(sel, updatedRecipe);
+
+            // 3. Controleer of het gelukt is met .isPresent()
+            if (result.isPresent()) {
+                refreshList();
+                listView.getSelectionModel().select(updatedRecipe); // Selecteer het nieuwe object
+                status("Updated recipe: " + updatedRecipe.getTitle());
+            } else {
+                error("Failed to update recipe in the list");
+            }
+
+        } catch (Exception ex) {
             error("Cannot update recipe: " + ex.getMessage());
         }
     }
-
     private void onDelete() {
         Recipe sel = listView.getSelectionModel().getSelectedItem();
         if (sel == null) {

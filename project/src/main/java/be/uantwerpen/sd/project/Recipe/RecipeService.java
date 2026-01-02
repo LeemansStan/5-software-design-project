@@ -5,15 +5,18 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Simplified service combining responsibilities of previous RecipeController and RecipeManager.
- * Acts as the single entry point for the View to interact with Recipe data.
+ * Herstelde RecipeService die werkt met het Builder Pattern en Immutability.
  */
 public class RecipeService {
     private final List<Recipe> all = new ArrayList<>();
 
-    // CREATE
+    // CREATE: Gebruikt nu de Builder
     public Recipe create(String title, String description, List<String> ingredients, Collection<String> tags) {
-        Recipe r = new Recipe(title, description, ingredients, tags);
+        Recipe r = new Recipe.Builder(title)
+                .description(description)
+                .ingredients(ingredients)
+                .tags(tags)
+                .build();
         all.add(r);
         return r;
     }
@@ -44,29 +47,44 @@ public class RecipeService {
         return all.stream().filter(predicate).collect(Collectors.toList());
     }
 
-    // UPDATE (returns updated instance)
-    public Optional<Recipe> updateTitle(Recipe recipe, String newTitle) {
-        return mutate(recipe, r -> r.setTitle(newTitle));
+    // UPDATE: Omdat Recipe onveranderlijk is, maken we steeds een nieuwe versie
+    public Optional<Recipe> updateTitle(Recipe old, String newTitle) {
+        if (old == null || !all.contains(old)) return Optional.empty();
+        Recipe updated = new Recipe.Builder(newTitle)
+                .description(old.getDescription())
+                .ingredients(old.getIngredients())
+                .tags(old.getTags())
+                .build();
+        return replace(old, updated);
     }
 
-    public Optional<Recipe> updateDescription(Recipe recipe, String newDescription) {
-        return mutate(recipe, r -> r.setDescription(newDescription));
+    public Optional<Recipe> updateDescription(Recipe old, String newDescription) {
+        if (old == null || !all.contains(old)) return Optional.empty();
+        Recipe updated = new Recipe.Builder(old.getTitle())
+                .description(newDescription)
+                .ingredients(old.getIngredients())
+                .tags(old.getTags())
+                .build();
+        return replace(old, updated);
     }
 
-    public Optional<Recipe> updateIngredients(Recipe recipe, List<String> newIngredients) {
-        return mutate(recipe, r -> r.setIngredients(newIngredients));
+    /**
+     * Hulpmethode om een oud object te vervangen door een nieuwe versie.
+     * Nodig voor de ViewApp om 'Callback Hell' te voorkomen.
+     */
+    public Optional<Recipe> replace(Recipe oldRecipe, Recipe newRecipe) {
+        int index = all.indexOf(oldRecipe);
+        if (index >= 0) {
+            all.set(index, newRecipe);
+            return Optional.of(newRecipe);
+        }
+        return Optional.empty();
     }
 
-    public Optional<Recipe> updateTags(Recipe recipe, Collection<String> newTags) {
-        return mutate(recipe, r -> r.setTags(newTags));
-    }
-
-    private Optional<Recipe> mutate(Recipe recipe, java.util.function.Consumer<Recipe> mutator) {
-        if (recipe == null) return Optional.empty();
-        // Ensure it is the same instance we manage; if not present, refuse to mutate
-        if (!all.contains(recipe)) return Optional.empty();
-        mutator.accept(recipe);
-        return Optional.of(recipe);
+    // STRATEGY PATTERN: Sorteren
+    public void sortRecipes(RecipeSortStrategy strategy) {
+        if (strategy == null) return;
+        strategy.sort(all);
     }
 
     // DELETE

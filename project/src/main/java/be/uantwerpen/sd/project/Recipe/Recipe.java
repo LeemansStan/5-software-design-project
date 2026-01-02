@@ -2,92 +2,86 @@ package be.uantwerpen.sd.project.Recipe;
 
 import java.util.*;
 
-
 public class Recipe {
-    private String title;
-    private String description;
-    private List<String> ingredients;
-    private Set<String> tags;
+    private final String title;
+    private final String description;
+    private final List<String> ingredients;
+    private final Set<String> tags;
 
-    public Recipe(String title, String description, List<String> ingredients, Collection<String> tags) {
-        validateTitle(title);
-        this.title = title.trim();
-        this.description = description == null ? "" : description.strip();
-        this.ingredients = sanitizeIngredients(ingredients);
-        this.tags = sanitizeTags(tags);
+    // Private constructor: wordt alleen door de Builder aangeroepen
+    private Recipe(Builder builder) {
+        this.title = builder.title;
+        this.description = builder.description;
+        this.ingredients = Collections.unmodifiableList(new ArrayList<>(builder.ingredients));
+        this.tags = Collections.unmodifiableSet(new LinkedHashSet<>(builder.tags));
     }
 
-    private static void validateTitle(String title) {
-        if (title == null || title.trim().isEmpty()) {
-            throw new IllegalArgumentException("title is required");
+    public static class Builder {
+        private String title;
+        private String description = "";
+        private List<String> ingredients = new ArrayList<>();
+        private Set<String> tags = new LinkedHashSet<>();
+
+        public Builder(String title) {
+            if (title == null || title.isBlank()) {
+                throw new IllegalArgumentException("Title is required");
+            }
+            this.title = title.trim();
+        }
+
+        public Builder description(String description) {
+            this.description = description == null ? "" : description.strip();
+            return this;
+        }
+
+        public Builder addIngredient(String ingredient) {
+            if (ingredient != null && !ingredient.isBlank()) {
+                this.ingredients.add(ingredient.strip());
+            }
+            return this;
+        }
+
+        // Handig: in één keer een hele lijst toevoegen
+        public Builder ingredients(List<String> ingredients) {
+            if (ingredients != null) {
+                ingredients.forEach(this::addIngredient);
+            }
+            return this;
+        }
+
+        public Builder addTag(String tag) {
+            if (tag != null && !tag.isBlank()) {
+                this.tags.add(tag.strip().toLowerCase(Locale.ROOT));
+            }
+            return this;
+        }
+
+        public Builder tags(Collection<String> tags) {
+            if (tags != null) {
+                tags.forEach(this::addTag);
+            }
+            return this;
+        }
+
+        public Recipe build() {
+            if (ingredients.isEmpty()) {
+                throw new IllegalStateException("Recipe must have at least one ingredient");
+            }
+            return new Recipe(this);
         }
     }
 
-    private static List<String> sanitizeIngredients(List<String> ingredients) {
-        if (ingredients == null) throw new IllegalArgumentException("ingredients cannot be null");
-        List<String> cleaned = new ArrayList<>();
-        for (String s : ingredients) {
-            if (s == null) continue;
-            String c = s.strip();
-            if (!c.isEmpty()) cleaned.add(c);
-        }
-        if (cleaned.isEmpty()) throw new IllegalArgumentException("ingredients cannot be empty");
-        return Collections.unmodifiableList(cleaned);
-    }
-
-    private static Set<String> sanitizeTags(Collection<String> tags) {
-        if (tags == null) return Collections.emptySet();
-        Set<String> cleaned = new LinkedHashSet<>();
-        for (String t : tags) {
-            if (t == null) continue;
-            String c = t.strip();
-            if (!c.isEmpty()) cleaned.add(c.toLowerCase(Locale.ROOT));
-        }
-        return Collections.unmodifiableSet(cleaned);
-    }
-
-// getters en setters
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        validateTitle(title);
-        this.title = title.trim();
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description == null ? "" : description.strip();
-    }
-
-    public List<String> getIngredients() {
-        return ingredients;
-    }
-
-    public void setIngredients(List<String> ingredients) {
-        this.ingredients = sanitizeIngredients(ingredients);
-    }
-
-    public Set<String> getTags() {
-        return tags;
-    }
-
-    public void setTags(Collection<String> tags) {
-        this.tags = sanitizeTags(tags);
-    }
-
+    // Alleen GETTERS, geen SETTERS (Immutability)
+    public String getTitle() { return title; }
+    public String getDescription() { return description; }
+    public List<String> getIngredients() { return ingredients; }
+    public Set<String> getTags() { return tags; }
 
     @Override
     public String toString() {
         return "Recipe{" +
                 "title='" + title + '\'' +
-                ", description='" + (description.length() > 60 ? description.substring(0, 57) + "..." : description) + '\'' +
                 ", ingredients=" + ingredients +
-                ", tags=" + tags +
                 '}';
     }
 }
