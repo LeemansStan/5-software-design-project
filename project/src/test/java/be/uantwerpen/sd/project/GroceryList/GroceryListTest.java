@@ -37,9 +37,9 @@ class GroceryListTest {
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
         snapshot.put(DayOfWeek.TUESDAY, new EnumMap<>(MealSlot.class));
 
-        Recipe r1 = new Recipe("Omelet", "", List.of("Eggs", "Milk", "Bread"), List.of());
-        Recipe r2 = new Recipe("Pancakes", "", List.of("Milk", "Butter"), List.of());
-        Recipe r3 = new Recipe("Cereal", "", List.of("Milk"), List.of());
+        Recipe r1 = new Recipe.Builder("Omelet").description("").ingredients(List.of("Eggs", "Milk", "Bread")).build();
+        Recipe r2 = new Recipe.Builder("Pancakes").description("").ingredients(List.of("Milk", "Butter")).build();
+        Recipe r3 = new Recipe.Builder("Cereal").description("").ingredients(List.of("Milk")).build();
 
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.BREAKFAST, r1);
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.DINNER, r2);
@@ -60,8 +60,8 @@ class GroceryListTest {
         // Plan with two recipes using Milk twice
         Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot = new EnumMap<>(DayOfWeek.class);
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
-        Recipe r1 = new Recipe("Porridge", "", List.of("Milk"), List.of());
-        Recipe r2 = new Recipe("Cereal", "", List.of("Milk"), List.of());
+        Recipe r1 = new Recipe.Builder("Porridge").description("").ingredients(List.of("Milk")).build();
+        Recipe r2 = new Recipe.Builder("Cereal").description("").ingredients(List.of("Milk")).build();
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.BREAKFAST, r1);
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.LUNCH, r2);
         gl.onWeekPlanChanged(snapshot);
@@ -81,7 +81,7 @@ class GroceryListTest {
         Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot = new EnumMap<>(DayOfWeek.class);
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.BREAKFAST,
-                new Recipe("Shake", "", List.of("Milk"), List.of()));
+                new Recipe.Builder("Shake").description("").ingredients(List.of("Milk")).build());
         gl.onWeekPlanChanged(snapshot);
 
         // Add a manual-only item
@@ -106,7 +106,7 @@ class GroceryListTest {
         Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot = new EnumMap<>(DayOfWeek.class);
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.DINNER,
-                new Recipe("Pasta", "", List.of("Milk"), List.of()));
+                new Recipe.Builder("Pasta").description("").ingredients(List.of("Milk")).build());
         gl.onWeekPlanChanged(snapshot);
 
         gl.addManualItem("Milk", 1); // overlap with auto
@@ -121,7 +121,7 @@ class GroceryListTest {
         Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot = new EnumMap<>(DayOfWeek.class);
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.LUNCH,
-                new Recipe("Cereal", "", List.of("Milk"), List.of()));
+                new Recipe.Builder("Cereal").description("").ingredients(List.of("Milk")).build());
         gl.onWeekPlanChanged(snapshot);
 
         gl.dismissItems(List.of("Milk"));
