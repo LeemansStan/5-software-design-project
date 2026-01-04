@@ -71,7 +71,7 @@ public class FullDesignIntegrationTest {
     }
 
     @Test
-    void endToEnd_DismissalResetsWhenActiveSlotsChange() {
+    void endToEnd_DismissalPersistsAcrossActiveSlotChange() {
         // Put one recipe to create an auto item
         Recipe pasta = new Recipe.Builder("Pasta")
                 .description("")
@@ -88,8 +88,8 @@ public class FullDesignIntegrationTest {
         Set<MealSlot> nextSlots = EnumSet.of(MealSlot.BREAKFAST, MealSlot.DINNER);
         mealService.setActiveSlots(nextSlots);
 
-        // After plan change, dismissed set should be cleared and item visible again
-        assertTrue(groceryList.getItems().containsKey("Milk"));
+        // After plan change, dismissed items remain hidden
+        assertFalse(groceryList.getItems().containsKey("Milk"));
     }
 
     @Test

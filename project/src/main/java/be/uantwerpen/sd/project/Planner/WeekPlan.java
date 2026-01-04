@@ -8,6 +8,10 @@ import java.util.*;
 /**
  * In-memory model representing a single week plan (Mon–Sun).
  * Keeps the active meal slots and the selected recipe per day/slot.
+ *
+ * Observer semantics:
+ * - Observers receive a full immutable snapshot on every change (active slots, set/clear recipe).
+ * - Adding an observer pushes an initial snapshot so UIs start in sync.
  */
 public class WeekPlan implements MealPlanSubject {
     private final EnumMap<DayOfWeek, DailyPlan> days = new EnumMap<>(DayOfWeek.class);
@@ -69,6 +73,27 @@ public class WeekPlan implements MealPlanSubject {
     public void clear(DayOfWeek day, MealSlot slot) {
         getDay(day).clear(slot);
         notifyObservers();
+    }
+
+    /**
+     * Replace all references of a specific Recipe instance that are currently
+     * planned anywhere in the week with another Recipe instance. Observers are
+     * notified once after all replacements are applied.
+     */
+    public void replaceRecipeReferences(Recipe oldRecipe, Recipe newRecipe) {
+        if (oldRecipe == null || newRecipe == null || oldRecipe == newRecipe) return;
+        boolean changed = false;
+        for (DayOfWeek d : DayOfWeek.values()) {
+            DailyPlan dp = getDay(d);
+            for (MealSlot slot : MealSlot.values()) {
+                Optional<Recipe> maybe = dp.get(slot);
+                if (maybe.isPresent() && maybe.get() == oldRecipe) {
+                    dp.set(slot, newRecipe); // direct set, no notify here
+                    changed = true;
+                }
+            }
+        }
+        if (changed) notifyObservers();
     }
 
     public Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot() {

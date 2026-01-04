@@ -19,6 +19,18 @@ import java.time.DayOfWeek;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * JavaFX application wiring together the Recipe editor/list, Weekly Planner, and Grocery List tabs.
+ *
+ * Highlights:
+ * - Uses Strategy pattern for sorting recipes (title / ingredient count).
+ * - Tag filter in the search bar narrows the recipe list.
+ * - Weekly planner dropdowns are filtered so they only show recipes compatible with the slot
+ *   based on meal-type tags (breakfast/lunch/dinner/snack(s)).
+ * - Observer pattern: GroceryList observes WeekPlan and rebuilds itself on plan changes.
+ * - Immutability: editing a recipe creates a new instance; the planner replaces old references
+ *   via MealPlanService#replaceRecipeReferences to stay in sync without errors.
+ */
 public class ViewApp extends Application {
     private final RecipeService controller = new RecipeService();
     private final MealPlanService mealController = new MealPlanService();
@@ -33,12 +45,14 @@ public class ViewApp extends Application {
     private TextArea ingredientsArea;
     private TextField tagsField;
     private TextField searchField;
+    private ComboBox<String> tagFilterBox;
     private Label statusLabel;
 
     // Weekly planner UI state
     private GridPane plannerGrid;
     private final Map<DayOfWeek, Map<MealSlot, ComboBox<Recipe>>> plannerCells = new EnumMap<>(DayOfWeek.class);
     private final Map<MealSlot, CheckBox> slotToggles = new EnumMap<>(MealSlot.class);
+    private boolean suppressPlannerListener = false;
 
     // Grocery List UI state
     private VBox groceryRoot;
@@ -226,6 +240,13 @@ public class ViewApp extends Application {
         }
     }
 
+    /**
+     * Rebuild the items and selection for every planner ComboBox.
+     * - Filters the available recipes per cell so only slot-compatible options are shown.
+     * - Keeps the existing selection if it is still valid after filtering; otherwise clears it.
+     * - Attaches a guarded value listener that silently reverts incompatible selections
+     *   (using the suppressPlannerListener flag) to avoid error pop-ups.
+     */
     private void refreshPlannerSelections() {
         // Make sure each ComboBox shows the correct selection from the model.
         for (Map.Entry<DayOfWeek, Map<MealSlot, ComboBox<Recipe>>> e : plannerCells.entrySet()) {
@@ -233,18 +254,56 @@ public class ViewApp extends Application {
             for (Map.Entry<MealSlot, ComboBox<Recipe>> ce : e.getValue().entrySet()) {
                 MealSlot slot = ce.getKey();
                 ComboBox<Recipe> combo = ce.getValue();
-                combo.setItems(recipes);
+
+                // Filter available recipes per slot so only compatible choices appear
+                List<Recipe> compatible = recipes.stream()
+                        .filter(r -> isCompatibleWithSlot(slot, r))
+                        .collect(Collectors.toList());
+                combo.setItems(FXCollections.observableArrayList(compatible));
+
                 Optional<Recipe> maybe = mealController.getRecipe(day, slot);
-                if (maybe.isPresent()) {
+                if (maybe.isPresent() && compatible.contains(maybe.get())) {
                     combo.getSelectionModel().select(maybe.get());
                 } else {
                     combo.getSelectionModel().clearSelection();
                 }
                 // Attach listener with proper context
                 combo.valueProperty().addListener((obs, old, val) -> {
+                    if (suppressPlannerListener) return;
                     if (val != null) {
-                        mealController.setRecipe(day, slot, val);
-                        status("Planned '" + val.getTitle() + "' for " + shortDay(day) + " (" + slot.getDisplayName() + ")");
+                        // Pre-check to avoid showing any error dialogs
+                        if (!isCompatibleWithSlot(slot, val)) {
+                            // silently revert
+                            suppressPlannerListener = true;
+                            try {
+                                if (old != null) {
+                                    combo.getSelectionModel().select(old);
+                                } else {
+                                    combo.getSelectionModel().clearSelection();
+                                }
+                            } finally {
+                                suppressPlannerListener = false;
+                            }
+                            status("This recipe cannot be planned in this slot");
+                            return;
+                        }
+                        try {
+                            mealController.setRecipe(day, slot, val);
+                            status("Planned '" + val.getTitle() + "' for " + shortDay(day) + " (" + slot.getDisplayName() + ")");
+                        } catch (IllegalArgumentException ex) {
+                            // Safety net: revert silently without error pop-up
+                            suppressPlannerListener = true;
+                            try {
+                                if (old != null) {
+                                    combo.getSelectionModel().select(old);
+                                } else {
+                                    combo.getSelectionModel().clearSelection();
+                                }
+                            } finally {
+                                suppressPlannerListener = false;
+                            }
+                            status("Selection reverted: incompatible with slot");
+                        }
                     }
                 });
             }
@@ -297,7 +356,7 @@ public class ViewApp extends Application {
         searchField = new TextField();
         searchField.setPromptText("Search by title");
 
-        // 1. Maak het keuzemenu aan voor het Strategy Pattern
+        // Strategy Pattern: sorting options
         ComboBox<String> sortBox = new ComboBox<>(FXCollections.observableArrayList(
                 "Sort: Default",
                 "Sort: Title (A-Z)",
@@ -305,7 +364,6 @@ public class ViewApp extends Application {
         ));
         sortBox.setValue("Sort: Default");
 
-        // 2. Koppel de strategieën aan de keuzes
         sortBox.setOnAction(e -> {
             String selected = sortBox.getValue();
             if (selected.contains("Title")) {
@@ -313,14 +371,22 @@ public class ViewApp extends Application {
             } else if (selected.contains("Ingredients")) {
                 controller.sortRecipes(new SortByIngredientCount());
             }
-            refreshList(); // Belangrijk om de lijst op het scherm te verversen!
+            refreshList(); // refresh visible list after sorting
         });
+
+        // Tag filter
+        tagFilterBox = new ComboBox<>();
+        refreshTagFilterOptions();
+        tagFilterBox.setOnAction(e -> refreshList());
 
         Button searchBtn = new Button("Search");
         Button resetBtn = new Button("Reset");
 
-        // 3. Zorg dat 'sortBox' hier in de lijst met onderdelen staat:
-        HBox box = new HBox(8, new Label("Search:"), searchField, sortBox, searchBtn, resetBtn);
+        HBox box = new HBox(8,
+                new Label("Search:"), searchField,
+                new Label("Tag:"), tagFilterBox,
+                sortBox,
+                searchBtn, resetBtn);
 
         HBox.setHgrow(searchField, Priority.ALWAYS);
         box.setAlignment(Pos.CENTER_LEFT);
@@ -330,6 +396,9 @@ public class ViewApp extends Application {
         resetBtn.setOnAction(e -> {
             searchField.clear();
             sortBox.setValue("Sort: Default");
+            if (tagFilterBox.getItems().contains("All tags")) {
+                tagFilterBox.setValue("All tags");
+            }
             refreshList();
         });
 
@@ -338,12 +407,12 @@ public class ViewApp extends Application {
     }
 
     private void doSearch() {
+        refreshList();
         String q = searchField.getText();
-        List<Recipe> result = controller.searchByTitle(q);
-        recipes.setAll(result);
-        // when recipe list changes, update planner selections in case references moved
-        refreshPlannerSelections();
-        status("Found " + result.size() + " recipe(s) for '" + (q == null ? "" : q) + "'");
+        int count = recipes.size();
+        status("Found " + count + " recipe(s) for '" + (q == null ? "" : q) + "'" +
+                (tagFilterBox != null && tagFilterBox.getValue() != null && !"All tags".equals(tagFilterBox.getValue())
+                        ? (" with tag '" + tagFilterBox.getValue() + "'") : ""));
     }
 
     private void populateForm(Recipe r) {
@@ -402,7 +471,12 @@ public class ViewApp extends Application {
 
             // 3. Controleer of het gelukt is met .isPresent()
             if (result.isPresent()) {
+                // Houd de weekplanner in sync: vervang oude referenties (immutability => nieuw object)
+                mealController.replaceRecipeReferences(sel, updatedRecipe);
+
+                // Ververs de zichtbare lijsten en planner dropdowns (refilter op tags)
                 refreshList();
+
                 listView.getSelectionModel().select(updatedRecipe); // Selecteer het nieuwe object
                 status("Updated recipe: " + updatedRecipe.getTitle());
             } else {
@@ -437,7 +511,71 @@ public class ViewApp extends Application {
     }
 
     private void refreshList() {
-        recipes.setAll(controller.listAll());
+        // rebuild tag filter options (preserving current selection)
+        refreshTagFilterOptions();
+
+        String q = searchField == null ? null : searchField.getText();
+        String selectedTag = (tagFilterBox == null) ? null : tagFilterBox.getValue();
+        String query = (q == null) ? "" : q.trim().toLowerCase(Locale.ROOT);
+        boolean filterByTitle = !query.isEmpty();
+        boolean filterByTag = (selectedTag != null && !selectedTag.equals("All tags"));
+
+        List<Recipe> base = controller.listAll();
+        List<Recipe> filtered = base.stream()
+                .filter(r -> !filterByTitle || r.getTitle().toLowerCase(Locale.ROOT).contains(query))
+                .filter(r -> !filterByTag || r.getTags().contains(selectedTag.toLowerCase(Locale.ROOT)))
+                .collect(Collectors.toList());
+
+        recipes.setAll(filtered);
+        // when recipe list changes, update planner selections to match references
+        refreshPlannerSelections();
+    }
+
+    private void refreshTagFilterOptions() {
+        if (tagFilterBox == null) return;
+        String current = tagFilterBox.getValue();
+        Set<String> tags = controller.listAll().stream()
+                .flatMap(r -> r.getTags().stream())
+                .collect(Collectors.toCollection(TreeSet::new));
+        List<String> items = new ArrayList<>();
+        items.add("All tags");
+        items.addAll(tags);
+        ObservableList<String> existing = tagFilterBox.getItems();
+        if (!existing.equals(FXCollections.observableArrayList(items))) {
+            tagFilterBox.setItems(FXCollections.observableArrayList(items));
+        }
+        if (current != null && items.contains(current)) {
+            tagFilterBox.setValue(current);
+        } else {
+            tagFilterBox.setValue("All tags");
+        }
+    }
+
+    // Determine if a recipe is allowed in a given meal slot based on its tags
+    private boolean isCompatibleWithSlot(MealSlot slot, Recipe recipe) {
+        if (recipe == null) return true;
+        Set<String> tags = recipe.getTags();
+        if (tags == null || tags.isEmpty()) return true; // no meal-type tags means no restriction
+        boolean hasBreakfast = tags.contains("breakfast");
+        boolean hasLunch = tags.contains("lunch");
+        boolean hasDinner = tags.contains("dinner");
+        boolean hasSnack = tags.contains("snack") || tags.contains("snacks");
+
+        // If none of the meal-type tags present, allow all slots
+        if (!hasBreakfast && !hasLunch && !hasDinner && !hasSnack) return true;
+
+        switch (slot) {
+            case BREAKFAST:
+                return hasBreakfast;
+            case LUNCH:
+                return hasLunch;
+            case DINNER:
+                return hasDinner;
+            case SNACKS:
+                return hasSnack;
+            default:
+                return true;
+        }
     }
 
     // Helpers
@@ -481,17 +619,80 @@ public class ViewApp extends Application {
     }
 
     private void seedDemoData() {
+        // Dinner examples
         controller.create(
                 "Spaghetti Aglio e Olio",
                 "Classic Italian pasta with garlic, olive oil, and chili flakes.",
                 List.of("spaghetti", "garlic", "olive oil", "chili flakes", "parsley", "salt"),
-                List.of("vegetarian", "quick", "budget")
+                List.of("vegetarian", "quick", "budget", "dinner")
         );
         controller.create(
                 "Chicken Curry",
                 "Creamy chicken curry with coconut milk.",
                 Arrays.asList("chicken", "onion", "garlic", "ginger", "curry paste", "coconut milk", "salt"),
-                List.of("dinner")
+                List.of("dinner", "asian")
+        );
+        controller.create(
+                "Grilled Salmon",
+                "Simple grilled salmon with lemon and herbs.",
+                Arrays.asList("salmon", "lemon", "olive oil", "dill", "salt", "pepper"),
+                List.of("dinner", "low-carb")
+        );
+
+        // Lunch examples
+        controller.create(
+                "Caesar Salad",
+                "Crisp romaine with classic Caesar dressing.",
+                Arrays.asList("romaine", "croutons", "parmesan", "caesar dressing", "lemon"),
+                List.of("lunch", "quick")
+        );
+        controller.create(
+                "Tomato Soup",
+                "Creamy tomato soup.",
+                Arrays.asList("tomatoes", "onion", "garlic", "vegetable broth", "cream", "basil"),
+                List.of("lunch", "vegetarian")
+        );
+
+        // Breakfast examples
+        controller.create(
+                "Pancakes",
+                "Fluffy pancakes with maple syrup.",
+                Arrays.asList("flour", "milk", "eggs", "baking powder", "butter", "salt"),
+                List.of("breakfast", "kids")
+        );
+        controller.create(
+                "Oatmeal Bowl",
+                "Warm oatmeal with banana and honey.",
+                Arrays.asList("oats", "milk", "banana", "honey", "cinnamon"),
+                List.of("breakfast", "healthy")
+        );
+
+        // Snack examples
+        controller.create(
+                "Fruit Yogurt Parfait",
+                "Layered yogurt with fruits and granola.",
+                Arrays.asList("yogurt", "strawberries", "blueberries", "granola", "honey"),
+                List.of("snack", "healthy")
+        );
+        controller.create(
+                "Hummus & Veggies",
+                "Homemade hummus served with carrot and cucumber sticks.",
+                Arrays.asList("chickpeas", "tahini", "lemon", "garlic", "olive oil", "carrot", "cucumber"),
+                List.of("snacks", "vegan")
+        );
+
+        // General (no meal-type tag; can be planned anywhere)
+        controller.create(
+                "Banana Bread",
+                "Moist banana bread with walnuts.",
+                Arrays.asList("bananas", "flour", "eggs", "sugar", "butter", "walnuts"),
+                List.of("baking", "sweet")
+        );
+        controller.create(
+                "Avocado Toast",
+                "Sourdough toast topped with smashed avocado and chili flakes.",
+                Arrays.asList("bread", "avocado", "lemon", "chili flakes", "salt", "pepper"),
+                List.of("vegetarian", "quick")
         );
     }
 
@@ -528,9 +729,10 @@ public class ViewApp extends Application {
         });
 
         Button refreshBtn = new Button("Refresh (remove checked)");
+        Button baselineBtn = new Button("Start New List");
         Button selectAllBtn = new Button("Select All");
         Button deselectAllBtn = new Button("Deselect All");
-        HBox controls = new HBox(8, refreshBtn, selectAllBtn, deselectAllBtn);
+        HBox controls = new HBox(8, refreshBtn, baselineBtn, selectAllBtn, deselectAllBtn);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(0, 0, 6, 0));
 
@@ -549,6 +751,12 @@ public class ViewApp extends Application {
             be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().removeItems(toRemove);
             rebuildGroceryUI();
             status("Removed " + toRemove.size() + " item(s) from grocery list");
+        });
+        baselineBtn.setOnAction(e -> {
+            // Treat all current auto items as completed; future additions will appear fresh
+            be.uantwerpen.sd.project.GroceryList.GroceryList.getInstance().setBaselineToCurrentAuto();
+            rebuildGroceryUI();
+            status("Started a new list from current plan (baseline set)");
         });
         selectAllBtn.setOnAction(e -> {
             for (javafx.scene.Node n : groceryItemsBox.getChildren()) {

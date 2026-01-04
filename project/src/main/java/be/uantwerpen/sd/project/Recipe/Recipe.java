@@ -2,13 +2,21 @@ package be.uantwerpen.sd.project.Recipe;
 
 import java.util.*;
 
+/**
+ * Domain object representing a cooking recipe.
+ *
+ * Design notes:
+ * - Immutable: all fields are final and there are no setters. Use the nested {@link Builder} to create instances.
+ * - Defensive copies + unmodifiable views are used for collections to avoid accidental external mutation.
+ * - Tags are normalized to lowercase to make filtering and slot-compatibility checks case-insensitive.
+ */
 public class Recipe {
     private final String title;
     private final String description;
     private final List<String> ingredients;
     private final Set<String> tags;
 
-    // Private constructor: wordt alleen door de Builder aangeroepen
+    // Private constructor: only called by the Builder to guarantee invariants
     private Recipe(Builder builder) {
         this.title = builder.title;
         this.description = builder.description;
@@ -41,7 +49,7 @@ public class Recipe {
             return this;
         }
 
-        // Handig: in één keer een hele lijst toevoegen
+        // Convenience: add a whole list at once
         public Builder ingredients(List<String> ingredients) {
             if (ingredients != null) {
                 ingredients.forEach(this::addIngredient);

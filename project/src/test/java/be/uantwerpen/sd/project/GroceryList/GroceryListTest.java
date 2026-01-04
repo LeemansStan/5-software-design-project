@@ -96,9 +96,9 @@ class GroceryListTest {
         assertFalse(itemsAfter.containsKey("Eggs"), "Manual item should be deleted");
         assertFalse(itemsAfter.containsKey("Milk"), "Auto item should be hidden (dismissed)");
 
-        // If plan changes, dismissed auto items can reappear
-        gl.onWeekPlanChanged(snapshot); // same snapshot but change triggers reset of dismissed
-        assertTrue(gl.getItems().containsKey("Milk"));
+        // If plan changes with same items, dismissed auto items stay hidden
+        gl.onWeekPlanChanged(snapshot); // same snapshot triggers rebuild, but dismissal persists
+        assertFalse(gl.getItems().containsKey("Milk"));
     }
 
     @Test
@@ -117,7 +117,7 @@ class GroceryListTest {
     }
 
     @Test
-    void dismissedResetOnPlanChange() {
+    void dismissedPersistsOnPlanChange() {
         Map<DayOfWeek, Map<MealSlot, Recipe>> snapshot = new EnumMap<>(DayOfWeek.class);
         snapshot.put(DayOfWeek.MONDAY, new EnumMap<>(MealSlot.class));
         snapshot.get(DayOfWeek.MONDAY).put(MealSlot.LUNCH,
@@ -127,9 +127,9 @@ class GroceryListTest {
         gl.dismissItems(List.of("Milk"));
         assertFalse(gl.getItems().containsKey("Milk"));
 
-        // Changing the plan clears dismissed set
+        // Changing the plan should keep dismissed items hidden as long as they still exist in the plan
         gl.onWeekPlanChanged(snapshot);
-        assertTrue(gl.getItems().containsKey("Milk"));
+        assertFalse(gl.getItems().containsKey("Milk"));
     }
 
     @Test

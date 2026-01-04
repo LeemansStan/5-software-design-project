@@ -5,7 +5,12 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Herstelde RecipeService die werkt met het Builder Pattern en Immutability.
+ * Service that manages all recipes in-memory.
+ *
+ * Design notes:
+ * - Uses the Recipe.Builder to enforce immutability when creating new instances.
+ * - Update operations create a new Recipe and replace the old reference in the list.
+ * - Provides simple searching and sorting using the Strategy pattern.
  */
 public class RecipeService {
     private final List<Recipe> all = new ArrayList<>();
